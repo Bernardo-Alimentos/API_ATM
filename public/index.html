@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Averbação</title>
+    <!-- CSS da Biblioteca DataTables -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+    <aside class="sidebar">
+        <h1>Automação</h1>
+        <nav class="sidebar-nav">
+            <ul>
+                <li><a href="#" id="nav-dashboard" class="active"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                <li><a href="#" id="nav-consulta"><i class="fas fa-search"></i> Consulta</a></li>
+                <li><a href="#" id="nav-config"><i class="fas fa-cog"></i> Configurações</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        
+        <!-- TELA 1: DASHBOARD -->
+        <section id="dashboard-view">
+            <div class="page-header">
+                <h2>Dashboard - Atividade de Hoje</h2>
+            </div>
+            <div class="card">
+                <div class="info-bar">
+                    <i class="fas fa-sync-alt"></i> Status: <strong id="status-text">Carregando dados...</strong>
+                </div>
+                <table id="dashboard-table" class="display" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>Empresa</th>
+                            <th>Nota</th>
+                            <th>Tipo Nota</th>
+                            <th>Representante</th>
+                            <th>Status</th>
+                            <th>Data Emissão</th>
+                            <th>Processado em</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dashboard-table-body">
+                        <!-- Linhas serão inseridas pelo script.js -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TELA 2: CONSULTA -->
+        <section id="consulta-view" class="hidden">
+            <div class="page-header">
+                <h2>Consultar Histórico</h2>
+            </div>
+            <div class="card">
+                <form id="consulta-form" class="filter-form">
+                    <div class="form-group">
+                        <label for="dataInicio">Data Início</label>
+                        <input type="date" id="dataInicio" name="dataInicio">
+                    </div>
+                    <div class="form-group">
+                        <label for="dataFim">Data Fim</label>
+                        <input type="date" id="dataFim" name="dataFim">
+                    </div>
+                    <div class="form-group">
+                        <label for="status">Status</label>
+                        <select id="status" name="status">
+                            <option value="">Todos</option>
+                            <option value="AVERBADA">Averbada</option>
+                            <option value="AGUARDANDO_ENVIO_ATM">Aguardando Envio</option>
+                            <option value="ERRO_AVERBACAO">Erro</option>
+                            <option value="IGNORADA_REGRA">Ignorada</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="numero_nota">Número da Nota</label>
+                        <input type="text" id="numero_nota" name="numero_nota" placeholder="Digite o número">
+                    </div>
+                    <button type="submit" class="btn-buscar">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                </form>
+
+                <hr class="form-divider">
+
+                <div class="info-bar" id="consulta-results-info">
+                    Realize uma busca para ver os resultados.
+                </div>
+                <table id="consulta-table" class="display" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>Empresa</th>
+                            <th>Nota</th>
+                            <th>Tipo Nota</th>
+                            <th>Representante</th>
+                            <th>Status</th>
+                            <th>Data Emissão</th>
+                            <th>Processado em</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="consulta-table-body">
+                        <!-- Resultados da busca serão inseridos aqui -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
