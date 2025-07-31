@@ -22,17 +22,58 @@ const averbacaoLogModel = {
     
     findPending: async () => {
         const res = await pool.query(`
-            SELECT log.*, emp.representantes_ignorar, emp.excecao_representante, emp.excecao_tipo_nota
+            SELECT log.*, emp.representantes_ignorar, emp.excecao_representante, emp.excecao_tipo_nota, emp.nome_empresa, emp.empresa_id_erp
             FROM averbacoes_log log
             JOIN empresas emp ON log.id_empresa = emp.id
-            WHERE log.status = 'PENDENTE_PROCESSAMENTO'
+            WHERE log.status = 'PENDENTE_PROCESSAMENTO' OR log.status = 'AGUARDANDO_ENVIO_ATM'
         `);
         return res.rows;
     },
 
+    /**
+     * Busca notas de averbação por uma lista de IDs e que estejam em status processável.
+     * @param {Array<number>} ids - Um array de IDs de notas.
+     * @returns {Promise<Array<Object>>} As notas encontradas.
+     */
+    findByIdsAndProcessableStatus: async (ids) => {
+        if (!ids || ids.length === 0) {
+            return [];
+        }
+        // Garante que os IDs são números inteiros
+        const cleanIds = ids.map(id => parseInt(id)).filter(id => !isNaN(id));
+        if (cleanIds.length === 0) {
+            return [];
+        }
+
+        // Busca notas que estão PENDENTE_PROCESSAMENTO ou AGUARDANDO_ENVIO_ATM
+        // e que correspondam aos IDs fornecidos.
+        const res = await pool.query(`
+            SELECT log.*, emp.representantes_ignorar, emp.excecao_representante, emp.excecao_tipo_nota, emp.nome_empresa, emp.empresa_id_erp
+            FROM averbacoes_log log
+            JOIN empresas emp ON log.id_empresa = emp.id
+            WHERE log.id = ANY($1::int[]) AND (log.status = 'PENDENTE_PROCESSAMENTO' OR log.status = 'AGUARDANDO_ENVIO_ATM' OR log.status = 'ERRO_AVERBACAO')
+        `, [cleanIds]);
+        return res.rows;
+    },
+
+    /**
+     * Busca uma nota de averbação pelo ID.
+     * @param {number} id - O ID da nota no log.
+     * @returns {Promise<Object|null>} A nota encontrada ou null.
+     */
+    findById: async (id) => {
+        const res = await pool.query(`
+            SELECT log.*, emp.representantes_ignorar, emp.excecao_representante, emp.excecao_tipo_nota, emp.nome_empresa, emp.empresa_id_erp
+            FROM averbacoes_log log
+            JOIN empresas emp ON log.id_empresa = emp.id
+            WHERE log.id = $1
+        `, [id]);
+        return res.rows[0];
+    },
+
     updateStatus: async (id, status, message) => {
         await pool.query(
-            "UPDATE averbacoes_log SET status = $1, mensagem_retorno = $2 WHERE id = $3",
+            "UPDATE averbacoes_log SET status = $1, mensagem_retorno = $2, data_processamento = CURRENT_TIMESTAMP WHERE id = $3",
             [status, message, id]
         );
     },
@@ -76,7 +117,6 @@ const averbacaoLogModel = {
         const params = [];
         let paramIndex = 1;
 
-        // CORREÇÃO: Filtro agora usa a data de emissão da nota
         if (filters.dataInicio) {
             params.push(filters.dataInicio);
             query += ` AND log.data_emissao::date >= $${paramIndex++}`;

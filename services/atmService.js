@@ -1,22 +1,18 @@
 // services/atmService.js
 const axios = require('axios');
-const https = require('https'); // Necessário para rejectUnauthorized
+const https = require('https');
 
-let authToken = null; // Variável para armazenar o token. Pode ser melhorada com um cache ou redis.
+let authToken = null; // Variável para armazenar o token.
 
 const atmService = {
-    // URL base da API da AT&M. Em homologação, é a mesma para Auth e averbação.
-    // Lembre-se de configurar as URLs de homologação/produção em seu .env
+    // URL base da API da AT&M.
     ATM_API_BASE_URL: process.env.ATM_API_BASE_URL || 'https://webserver.averba.com.br/rest',
 
-    // Credenciais para autenticação na AT&M (usuário, senha, códigoatm)
-    // ATENÇÃO: Em produção, estas deveriam vir de um gerenciador de segredos (Secrets Manager, etc.)
+    // Credenciais para autenticação na AT&M
     ATM_USER: process.env.ATM_USER,
     ATM_PASSWORD: process.env.ATM_PASSWORD,
     ATM_CODIGO_ATM: process.env.ATM_CODIGO_ATM,
 
-    // Agente HTTPS para aceitar certificados autoassinados em ambiente de teste, se necessário.
-    // Em produção, isso geralmente deve ser 'true' ou o certificado deve ser válido.
     httpsAgent: new https.Agent({ rejectUnauthorized: false }),
 
     /**
@@ -44,7 +40,7 @@ const atmService = {
             );
 
             if (response.data && response.data.Bearer) {
-                authToken = response.data.Bearer; // Armazena o token
+                authToken = response.data.Bearer;
                 console.log('  ATM Service: Token obtido com sucesso.');
                 return authToken;
             } else {
@@ -52,6 +48,10 @@ const atmService = {
             }
         } catch (error) {
             console.error('  ATM Service: Erro na autenticação:', error.message || error);
+            if (error.response) {
+                console.error('  ATM Service: Detalhes do erro da API da AT&M (Auth):', JSON.stringify(error.response.data, null, 2)); // MODIFICADO: Stringify para ver o objeto completo
+                console.error('  ATM Service: Status HTTP (Auth):', error.response.status);
+            }
             throw new Error(`Falha na autenticação da AT&M: ${error.response?.data?.message || error.message}`);
         }
     },
@@ -61,8 +61,6 @@ const atmService = {
      * @returns {Promise<string>} O Token Bearer válido.
      */
     getAuthToken: async () => {
-        // Implementação futura: Adicionar lógica para verificar expiração do token antes de reautenticar.
-        // Por enquanto, sempre reautentica, ou você pode adicionar um timer/flag de validade.
         if (!authToken) {
             await atmService.authenticate();
         }
@@ -71,17 +69,17 @@ const atmService = {
 
     /**
      * Envia o XML de uma NF-e para averbação na AT&M.
-     * @param {string} nfeXml - O XML da NF-e protocolada pela SEFAZ.
+     * @param {string} nfeXml - O XML da NF-e protocolada pela SEFAZ (nfeProc completo).
      * @returns {Promise<object>} O objeto de resposta da averbação da AT&M.
      * @throws {Error} Se a averbação falhar.
      */
     averbarNFe: async (nfeXml) => {
-        const token = await atmService.getAuthToken(); // Garante que temos um token válido
+        const token = await atmService.getAuthToken();
         console.log('  ATM Service: Enviando NF-e para averbação...');
         try {
             const response = await axios.post(
-                `${atmService.ATM_API_BASE_URL}/NFe`, // Endpoint para NF-e
-                nfeXml, // O corpo da requisição é o XML puro
+                `${atmService.ATM_API_BASE_URL}/NFe`,
+                nfeXml, // O corpo da requisição é o XML puro (nfeProc completo)
                 {
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -92,10 +90,10 @@ const atmService = {
                 }
             );
 
-            if (response.data.Erros) { // A AT&M retorna 'Erros' mesmo em 200 OK para erros de negócio
+            // A AT&M pode retornar 'Erros' no corpo da resposta mesmo com status 200 OK para erros de negócio
+            if (response.data && response.data.Erros) { 
                 const errorMessage = response.data.Erros.Erro.map(e => `${e.Codigo}: ${e.Descricao}`).join('; ');
-                console.error('  ATM Service: Erro de averbação retornado pela AT&M:', errorMessage);
-                // Você pode querer lançar um erro específico aqui ou retornar a resposta de erro completa
+                console.error('  ATM Service: Erro de averbação retornado pela AT&M (no corpo da resposta):', errorMessage);
                 return { success: false, data: response.data, message: errorMessage };
             }
 
@@ -104,11 +102,17 @@ const atmService = {
 
         } catch (error) {
             console.error('  ATM Service: Erro ao averbar NF-e:', error.message || error);
-            // Captura erros de rede ou de status HTTP (ex: 401 para token expirado)
-            if (error.response && error.response.status === 401 && error.response.data.Codigo === '915') {
-                console.log('  ATM Service: Token expirado. Tentando reautenticar...');
+            if (error.response) {
+                // MODIFICADO: Usar JSON.stringify para imprimir o objeto completo do erro da AT&M
+                console.error('  ATM Service: Detalhes do erro da API da AT&M (Averbação):', JSON.stringify(error.response.data, null, 2)); 
+                console.error('  ATM Service: Status HTTP (Averbação):', error.response.status);
+                console.error('  ATM Service: Headers da requisição (Averbação):', error.config.headers);
+                console.error('  ATM Service: URL da requisição (Averbação):', error.config.url);
+            }
+            // Tratar erro de Token expirado para tentar reautenticar e re-enviar
+            if (error.response && error.response.status === 401 && error.response.data && error.response.data.Codigo === '915') {
+                console.log('  ATM Service: Token expirado. Reautentique e tente novamente.');
                 authToken = null; // Invalida o token atual
-                // Tentar reautenticar e re-enviar a requisição (lógica mais complexa, pode ser no automationService)
                 throw new Error('Token expirado. Reautentique e tente novamente.');
             }
             throw new Error(`Falha na averbação da AT&M: ${error.response?.data?.message || error.message}`);

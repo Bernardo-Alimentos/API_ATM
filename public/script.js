@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusText = document.getElementById('status-text');
     let dashboardDataTable = null;
     let consultaDataTable = null;
-    let empresasDataTable = null; // Para a tabela de empresas
+    let empresasDataTable = null;
 
     // --- Elementos das Views ---
     const dashboardView = document.getElementById('dashboard-view');
@@ -23,6 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Elementos da Consulta ---
     const consultaForm = document.getElementById('consulta-form');
+    const selectAllNotesCheckbox = document.getElementById('select-all-notes'); // NOVO: Checkbox "Selecionar Todos"
+    const reenviarSelecionadasBtn = document.getElementById('reenviar-selecionadas-btn'); // NOVO: Botão "Reenviar Selecionadas"
 
     // --- Elementos das Configurações de Empresas ---
     const addEmpresaBtn = document.getElementById('add-empresa-btn');
@@ -43,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'representantes_ignorar': 'representantes_ignorar',
         'excecao_representante': 'excecao_representante',
         'excecao_tipo_nota': 'excecao_tipo_nota',
-        'ativo': 'ativo' // Checkbox
+        'ativo': 'ativo'
     };
 
     // Mapeia os status internos para textos e classes CSS
@@ -57,7 +59,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Lógica de Navegação e Visibilidade das Seções ---
     function showView(viewToShowId) {
-        // Remove 'active' do menu lateral e 'active-section' das seções
         document.querySelectorAll('.sidebar-nav li a').forEach(link => link.classList.remove('active'));
         document.querySelectorAll('main section').forEach(section => {
             section.classList.remove('active-section');
@@ -69,10 +70,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (consultaDataTable) { consultaDataTable.destroy(); consultaDataTable = null; }
         if (empresasDataTable) { empresasDataTable.destroy(); empresasDataTable = null; }
 
-        // MANTENHA ESTA LINHA: Garante que o modal esteja oculto ao trocar de tela principal
         closeEmpresaModal(); // Fechar o modal sempre que trocar de view principal.
 
-        // Ativa a view e o link de navegação correto
         if (viewToShowId === 'dashboard-view') {
             navDashboard.classList.add('active');
             dashboardView.classList.remove('hidden-section');
@@ -82,15 +81,18 @@ document.addEventListener('DOMContentLoaded', () => {
             navConsulta.classList.add('active');
             consultaView.classList.remove('hidden-section');
             consultaView.classList.add('active-section');
+            // Resetar filtros e buscar dados ao entrar na consulta
+            consultaForm.reset();
+            fetchConsultaData(''); // Carrega a consulta vazia ao entrar na tela
         } else if (viewToShowId === 'config-view') {
             navConfig.classList.add('active');
             configView.classList.remove('hidden-section');
             configView.classList.add('active-section');
             fetchAndRenderEmpresas();
+            resetEmpresaForm();
         }
     }
 
-    // Adiciona event listeners para os links de navegação
     navDashboard.addEventListener('click', (e) => { e.preventDefault(); showView('dashboard-view'); });
     navConsulta.addEventListener('click', (e) => { e.preventDefault(); showView('consulta-view'); });
     navConfig.addEventListener('click', (e) => { e.preventDefault(); showView('config-view'); });
@@ -115,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderDashboardTable(data) {
-        if (dashboardDataTable) { // Garante que só destrói se já existe
+        if (dashboardDataTable) {
             dashboardDataTable.destroy();
         }
 
@@ -178,13 +180,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderConsultaTable(data) {
-        if (consultaDataTable) { // Garante que só destrói se já existe
+        if (consultaDataTable) {
             consultaDataTable.destroy();
         }
 
         consultaDataTable = new DataTable('#consulta-table', {
             data: data,
             columns: [
+                { // NOVO: Coluna para o checkbox individual
+                    data: 'id',
+                    render: function (data, type, row) {
+                        // Apenas permite selecionar notas com status de reenvio válido
+                        const canResend = ['PENDENTE_PROCESSAMENTO', 'AGUARDANDO_ENVIO_ATM', 'ERRO_AVERBACAO'].includes(row.status);
+                        return canResend ? `<input type="checkbox" class="note-select-checkbox" value="${data}">` : '';
+                    },
+                    orderable: false,
+                    className: 'dt-body-center' // Centraliza o checkbox
+                },
                 { data: 'nome_empresa' },
                 { data: 'numero_nota' },
                 { data: 'tipo_nota' },
@@ -207,32 +219,91 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             ],
             language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json' },
-            order: [[6, 'desc']]
+            order: [[7, 'desc']] // Ajuste o índice da coluna para ordenação (agora 7 para "Processado em")
+        });
+
+        // NOVO: Event listeners para os checkboxes da tabela de consulta
+        $('#consulta-table').off('change', '.note-select-checkbox').on('change', '.note-select-checkbox', function () {
+            // Se um checkbox individual mudar, desmarca "Selecionar Todos" se nem todos estiverem marcados
+            if (!this.checked) {
+                selectAllNotesCheckbox.checked = false;
+            } else {
+                // Verifica se todos os checkboxes visíveis estão marcados
+                const allChecked = $('.note-select-checkbox:visible:not(:checked)').length === 0;
+                selectAllNotesCheckbox.checked = allChecked;
+            }
         });
     }
 
-    // --- Lógica das Configurações de Empresas (NOVAS FUNÇÕES PARA O CRUD) ---
+    // NOVO: Lógica para o checkbox "Selecionar Todos"
+    selectAllNotesCheckbox.addEventListener('change', function () {
+        // Marca/desmarca todos os checkboxes individuais visíveis
+        $('.note-select-checkbox:visible').prop('checked', this.checked);
+    });
+
+    // NOVO: Lógica para o botão "Reenviar Selecionadas"
+    reenviarSelecionadasBtn.addEventListener('click', async () => {
+        const selectedNoteIds = [];
+        // Coleta os IDs das notas selecionadas
+        $('.note-select-checkbox:checked').each(function () {
+            selectedNoteIds.push(parseInt($(this).val()));
+        });
+
+        if (selectedNoteIds.length === 0) {
+            alert('Selecione pelo menos uma nota para reenviar.');
+            return;
+        }
+
+        if (!confirm(`Tem certeza que deseja reenviar ${selectedNoteIds.length} nota(s) selecionada(s)?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/consulta/reenviar-notas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ noteIds: selectedNoteIds })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido ao reenviar notas.' }));
+                throw new Error(errorData.error || `Erro HTTP! Status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            alert(result.message || 'Notas selecionadas enviadas para reprocessamento.');
+            // Após o reenvio, recarrega a tabela de consulta para ver os status atualizados
+            const formData = new FormData(consultaForm);
+            const params = new URLSearchParams(formData);
+            await fetchConsultaData(params.toString()); // Re-executa a busca com os filtros atuais
+            selectAllNotesCheckbox.checked = false; // Desmarca o "Selecionar Todos"
+        } catch (error) {
+            console.error('Erro ao reenviar notas:', error);
+            alert(`Erro ao reenviar notas: ${error.message}`);
+        }
+    });
+
+
+    // --- Lógica das Configurações de Empresas ---
 
     // Funções para abrir/fechar o modal
     function openEmpresaModal() {
-        empresaModal.classList.remove('hidden'); // Remove a classe 'hidden'
+        empresaModal.classList.remove('hidden');
     }
 
     function closeEmpresaModal() {
-        empresaModal.classList.add('hidden'); // Adiciona a classe 'hidden'
-        resetEmpresaForm(); // Limpa o formulário ao fechar
+        empresaModal.classList.add('hidden');
+        resetEmpresaForm();
     }
 
     // Event listeners para o modal
     closeEmpresaModalBtn.addEventListener('click', closeEmpresaModal);
-    // Fecha o modal se clicar fora da área de conteúdo (apenas se for o próprio modal a ser clicado, não seus filhos)
     window.addEventListener('click', (event) => {
-        if (event.target === empresaModal) { // CORRIGIDO: Checa se o CLIQUE foi NO OVERLAY do modal
+        if (event.target == empresaModal) {
             closeEmpresaModal();
         }
     });
 
-    // Função para buscar e renderizar a lista de empresas
     async function fetchAndRenderEmpresas() {
         try {
             const response = await fetch('/api/config/empresas');
@@ -248,9 +319,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Função para renderizar a tabela de empresas
     function renderEmpresasTable(empresas) {
-        if (empresasDataTable) { // Garante que só destrói se já existe
+        if (empresasDataTable) {
             empresasDataTable.destroy();
         }
 
@@ -272,7 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 },
                 {
-                    data: null, // Coluna para ações
+                    data: null,
                     render: function (data, type, row) {
                         return `
                             <button class="edit-btn btn-primary" data-id="${row.id}"><i class="fas fa-edit"></i> Editar</button>
@@ -282,17 +352,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     orderable: false
                 }
             ],
-            language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json' },
+            language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json' }
         });
 
-        // Adiciona event listeners para os botões de editar e excluir após a tabela ser desenhada
         $('#empresas-table').off('click', '.edit-btn').on('click', '.edit-btn', function () {
             const id = $(this).data('id');
-            // Encontra a empresa nos dados que foram usados para popular a tabela
             const empresa = empresas.find(e => e.id === id);
             if (empresa) {
                 populateEmpresaFormForEdit(empresa);
-                openEmpresaModal(); // Abre o modal para edição
+                openEmpresaModal();
             }
         });
 
@@ -302,7 +370,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Função para preencher o formulário para edição
     function populateEmpresaFormForEdit(empresa) {
         empresaIdInput.value = empresa.id;
         document.getElementById('nome_empresa').value = empresa.nome_empresa;
@@ -316,31 +383,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         formTitle.textContent = `Editar Empresa: ${empresa.nome_empresa}`;
         saveEmpresaBtn.innerHTML = '<i class="fas fa-save"></i> Atualizar Empresa';
-        cancelEditBtn.classList.remove('hidden'); // Mostra o botão de cancelar
+        cancelEditBtn.classList.remove('hidden');
     }
 
-    // Função para resetar o formulário e voltar ao modo de criação
     function resetEmpresaForm() {
-        empresaForm.reset(); // Limpa todos os campos do formulário
-        empresaIdInput.value = ''; // Limpa o ID oculto
+        empresaForm.reset();
+        empresaIdInput.value = '';
         formTitle.textContent = 'Adicionar Nova Empresa';
         saveEmpresaBtn.innerHTML = '<i class="fas fa-plus"></i> Salvar Empresa';
-        cancelEditBtn.classList.add('hidden'); // Esconde o botão de cancelar
+        cancelEditBtn.classList.add('hidden');
     }
 
-    // Event Listener para o botão "Adicionar Nova Empresa" na lista
     addEmpresaBtn.addEventListener('click', () => {
-        resetEmpresaForm(); // Limpa o formulário
-        openEmpresaModal(); // Abre o modal para uma nova criação
+        resetEmpresaForm();
+        openEmpresaModal();
     });
 
-    // Event Listener para o botão "Cancelar" dentro do modal (edição)
-    cancelEditBtn.addEventListener('click', closeEmpresaModal); // Agora fecha o modal
+    cancelEditBtn.addEventListener('click', closeEmpresaModal);
 
-
-    // Event Listener para o formulário de empresas (salvar/atualizar)
     empresaForm.addEventListener('submit', async (event) => {
-        event.preventDefault(); // Impede o envio padrão do formulário
+        event.preventDefault();
 
         const id = empresaIdInput.value;
         const empresaData = {};
@@ -349,10 +411,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (element) {
                 empresaData[formFieldMap[key]] = element.type === 'checkbox' ? element.checked : element.value;
                 if (key === 'empresa_id_erp') {
-                    // Garante que empresa_id_erp seja um número ou null
                     empresaData[formFieldMap[key]] = parseInt(element.value) || (element.value === '' ? null : undefined);
                 }
-                // Converter strings vazias para null para campos de texto opcionais
                 if (element.tagName === 'INPUT' && element.type === 'text' && element.value === '') {
                     empresaData[formFieldMap[key]] = null;
                 }
@@ -361,13 +421,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             let response;
-            if (id) { // Se houver ID, é uma atualização (PUT)
+            if (id) {
                 response = await fetch(`/api/config/empresas/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(empresaData)
                 });
-            } else { // Senão, é uma criação (POST)
+            } else {
                 response = await fetch('/api/config/empresas', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -382,15 +442,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const result = await response.json();
             alert(`Empresa ${id ? 'atualizada' : 'criada'} com sucesso!`);
-            closeEmpresaModal(); // Fecha o modal após sucesso
-            fetchAndRenderEmpresas(); // Recarrega a lista de empresas
+            closeEmpresaModal();
+            fetchAndRenderEmpresas();
         } catch (error) {
             console.error('Erro ao salvar empresa:', error);
             alert(`Erro ao salvar empresa: ${error.message}`);
         }
     });
 
-    // Função para deletar uma empresa
     async function deleteEmpresa(id) {
         if (!confirm('Tem certeza que deseja excluir esta empresa? Esta ação é irreversível.')) {
             return;
@@ -411,8 +470,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Empresa excluída com sucesso! (Resposta do servidor não 204, pode indicar problema)');
             }
 
-            fetchAndRenderEmpresas(); // Recarrega a lista
-            resetEmpresaForm(); // Limpa o formulário caso a empresa excluída estivesse sendo editada
+            fetchAndRenderEmpresas();
+            resetEmpresaForm();
         } catch (error) {
             console.error('Erro ao excluir empresa:', error);
             alert(`Erro ao excluir empresa: ${error.message}`);
@@ -420,7 +479,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Inicialização da Aplicação ---
-    empresaModal.classList.add('hidden'); // ADICIONADO: Esconde o modal na inicialização
-    showView('dashboard-view'); 
+    showView('dashboard-view');
     setInterval(fetchDashboardData, 30000);
 });

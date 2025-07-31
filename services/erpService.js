@@ -29,59 +29,72 @@ const erpService = {
                 url += `&continuationToken=${continuationToken}`;
             }
 
-            console.log(`   ERP Service: Buscando página ${pagina} para ${empresa.nome_empresa} (${dataDeBusca})...`);
+            console.log(`   ERP Service: Buscando página ${pagina} para ${empresa.nome_empresa} (ID ERP: ${empresa.empresa_id_erp}) para data ${dataDeBusca}...`);
 
             const requestConfig = {
                 method: 'get',
                 url: url,
                 headers: {
                     'Authorization': process.env.ERP_API_TOKEN,
-                    'empresa': String(empresa.empresa_id_erp),
+                    'empresa': String(empresa.empresa_id_erp), // Usar empresa_id_erp aqui
                     'accept': 'application/json',
-                    'User-Agent': 'axios/1.6.8' // Boa prática para identificar o cliente
+                    'User-Agent': 'axios/1.6.8'
                 },
-                // Permite requisições HTTPS para servidores com certificados autoassinados (ambiente de teste)
                 httpsAgent: new https.Agent({ rejectUnauthorized: false }) 
             };
 
             try {
                 const response = await axios(requestConfig);
-                const notasDaPagina = response.data.data || []; // Assumindo que as notas estão em 'response.data.data'
+                const notasDaPagina = response.data.data || [];
                 if (Array.isArray(notasDaPagina) && notasDaPagina.length > 0) {
                     todasAsNotas.push(...notasDaPagina);
                 }
-                continuationToken = response.data.continuationToken; // Assumindo que o token de continuação está aqui
+                continuationToken = response.data.continuationToken;
                 pagina++;
             } catch (error) {
                 console.error(`   ERP Service: Erro ao buscar página ${pagina} para ${empresa.nome_empresa}:`, error.message || error);
-                throw error; // Relança o erro para ser tratado no automationService
+                if (error.response) {
+                    console.error('   ERP Service: Detalhes do erro da API do ERP:', error.response.data);
+                    console.error('   ERP Service: Status HTTP:', error.response.status);
+                    console.error('   ERP Service: Headers da resposta:', error.response.headers);
+                }
+                throw error;
             }
-        } while (continuationToken); // Continua enquanto houver um token de continuação
+        } while (continuationToken);
 
         return todasAsNotas;
     },
 
     /**
      * Busca o XML de uma nota fiscal específica no ERP.
-     * @param {string} nomeEmpresa - Nome da empresa (para logs e header 'empresa').
+     * @param {number} empresaIdErp - O ID da empresa no ERP (numérico).
+     * @param {string} nomeEmpresa - Nome da empresa (para logs).
      * @param {string} dataEmissao - Data de emissão da nota no formato YYYY-MM-DD.
      * @param {string} codNota - Código/Número da nota fiscal.
      * @returns {Promise<string|null>} O XML da nota como string, ou null se não encontrado.
      * @throws {Error} Se a consulta falhar.
      */
-    fetchNotaXML: async (nomeEmpresa, dataEmissao, codNota) => {
-        // URL base do ERP para buscar o XML
+    fetchNotaXML: async (empresaIdErp, nomeEmpresa, dataEmissao, codNota) => {
+        // Log para depuração dos parâmetros recebidos
+        console.log(`   ERP Service: Parâmetros recebidos para fetchNotaXML:`);
+        console.log(`     - empresaIdErp: ${empresaIdErp}`);
+        console.log(`     - nomeEmpresa: ${nomeEmpresa}`);
+        console.log(`     - dataEmissao: ${dataEmissao}`);
+        console.log(`     - codNota: ${codNota}`);
+
+        // CONSTRUÇÃO DA URL COM OS PARÂMETROS NA ORDEM CORRETA
         const url = `${process.env.ERP_API_URL}/notaFiscalXML?dataEmissao=${dataEmissao}&codNota=${codNota}`;
 
-        console.log(`   ERP Service: Buscando XML para a nota ${codNota} (Empresa: ${nomeEmpresa}) em ${dataEmissao}...`);
+        console.log(`   ERP Service: Buscando XML para a nota ${codNota} (Empresa ID: ${empresaIdErp}) em ${dataEmissao}...`);
+        console.log(`   ERP Service: URL da requisição XML: ${url}`);
 
         const requestConfig = {
             method: 'get',
             url: url,
             headers: {
                 'Authorization': process.env.ERP_API_TOKEN,
-                'empresa': String(nomeEmpresa), // O ERP espera o nome da empresa ou o ID? Verifique sua API.
-                'accept': 'application/json', // A API retorna JSON que contem o XML em uma string
+                'empresa': String(empresaIdErp), // Usar empresaIdErp aqui
+                'accept': 'application/json',
                 'User-Agent': 'axios/1.6.8'
             },
             httpsAgent: new https.Agent({ rejectUnauthorized: false })
@@ -89,19 +102,25 @@ const erpService = {
 
         try {
             const response = await axios(requestConfig);
-            // ATENÇÃO: Ajuste esta parte conforme a estrutura REAL da resposta do seu ERP.
-            // O XML pode estar em 'response.data.xml', 'response.data.content', 'response.data.data.xmlContent', etc.
-            if (response.data && response.data.xmlContent) { // Exemplo comum: o XML está em 'xmlContent'
+            // CORRIGIDO: Agora verifica se o XML está em 'response.data.arquivo'
+            if (response.data && response.data.arquivo) { 
+                return response.data.arquivo; 
+            } else if (response.data && response.data.xmlContent) { // Mantém a verificação anterior como fallback
                 return response.data.xmlContent; 
-            } else if (response.data && response.data.data && response.data.data.xmlContent) { // Outro exemplo de estrutura aninhada
+            } else if (response.data && response.data.data && response.data.data.xmlContent) { // Mantém a verificação anterior como fallback
                 return response.data.data.xmlContent;
             } else {
                 console.warn(`   ERP Service: XML não encontrado na resposta para nota ${codNota}. Estrutura da resposta inesperada:`, response.data);
-                return null; // Retorna null se a estrutura do XML não for encontrada
+                return null;
             }
         } catch (error) {
             console.error(`   ERP Service: Erro ao buscar XML para a nota ${codNota}:`, error.message || error);
-            // Se o erro for um 404 ou 204 (No Content), pode significar que o XML não existe para aquela nota
+            if (error.response) {
+                console.error('   ERP Service: Detalhes do erro da API do ERP (XML):', error.response.data);
+                console.error('   ERP Service: Status HTTP (XML):', error.response.status);
+                console.error('   ERP Service: Headers da requisição (XML):', requestConfig.headers);
+                console.error('   ERP Service: URL da requisição (XML):', requestConfig.url);
+            }
             if (error.response && (error.response.status === 404 || error.response.status === 204)) {
                 console.warn(`   ERP Service: XML para nota ${codNota} não encontrado (HTTP Status: ${error.response.status}).`);
                 return null;
