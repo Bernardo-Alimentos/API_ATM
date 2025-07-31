@@ -26,10 +26,35 @@ const empresaModel = {
     },
 
     /**
+     * Busca uma empresa específica pelo ID.
+     * @param {number} id - O ID da empresa.
+     * @returns {Promise<Object|null>} A empresa encontrada ou null se não existir.
+     */
+    findById: async (id) => {
+        const res = await pool.query('SELECT * FROM empresas WHERE id = $1', [id]);
+        return res.rows[0];
+    },
+
+    /**
+     * Cria uma nova empresa no banco de dados.
+     * @param {Object} data - Os dados da nova empresa.
+     * @returns {Promise<Object>} A empresa criada.
+     */
+    create: async (data) => {
+        const { nome_empresa, cnpj, empresa_id_erp, tipos_nota_considerar, representantes_ignorar, excecao_representante, excecao_tipo_nota, ativo } = data;
+        const res = await pool.query(
+            `INSERT INTO empresas (nome_empresa, cnpj, empresa_id_erp, tipos_nota_considerar, representantes_ignorar, excecao_representante, excecao_tipo_nota, ativo)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [nome_empresa, cnpj, empresa_id_erp, tipos_nota_considerar, representantes_ignorar, excecao_representante, excecao_tipo_nota, ativo]
+        );
+        return res.rows[0];
+    },
+
+    /**
      * Atualiza os dados de uma empresa específica no banco de dados.
      * @param {number} id - O ID da empresa a ser atualizada.
      * @param {Object} data - Os novos dados da empresa.
-     * @returns {Promise<Object>} A empresa atualizada.
+     * @returns {Promise<Object|null>} A empresa atualizada ou null se não for encontrada.
      */
     update: async (id, data) => {
         const { nome_empresa, cnpj, empresa_id_erp, tipos_nota_considerar, representantes_ignorar, excecao_representante, excecao_tipo_nota, ativo } = data;
@@ -48,6 +73,16 @@ const empresaModel = {
             [nome_empresa, cnpj, empresa_id_erp, tipos_nota_considerar, representantes_ignorar, excecao_representante, excecao_tipo_nota, ativo, id]
         );
         return res.rows[0];
+    },
+
+    /**
+     * Deleta uma empresa do banco de dados.
+     * @param {number} id - O ID da empresa a ser deletada.
+     * @returns {Promise<boolean>} True se a empresa foi deletada com sucesso, false caso contrário.
+     */
+    delete: async (id) => {
+        const res = await pool.query('DELETE FROM empresas WHERE id = $1 RETURNING id', [id]);
+        return res.rowCount > 0;
     }
 };
 

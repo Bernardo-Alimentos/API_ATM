@@ -7,7 +7,7 @@ INSTRUÇÕES: Este é o nosso novo ponto de entrada.
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const pool = require('./config/db'); // Importa a conexão do banco
+const pool = require('./config/db');
 
 // Importa as rotas
 const apiRoutes = require('./routes/apiRoutes');
@@ -20,22 +20,21 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middlewares
-app.use(express.static(path.join(__dirname, 'public'))); // Servir arquivos estáticos
+app.use(express.json()); // ADICIONE ESTA LINHA AQUI PARA HABILITAR O PARSEAMENTO DE JSON
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Usar as Rotas
-app.use('/api', apiRoutes); // Todas as rotas de API começarão com /api
-app.use('/', viewRoutes);   // Rotas que servem as páginas
+app.use('/api', apiRoutes);
+app.use('/', viewRoutes);
 
 // Iniciar o Servidor
 app.listen(PORT, async () => {
     console.log(`Servidor rodando na porta ${PORT}`);
     try {
-        // Testa a conexão com o banco
         const client = await pool.connect();
         console.log('Conexão com o banco de dados PostgreSQL estabelecida com sucesso.');
         client.release();
         
-        // Inicia o loop de automação
         automationService.start();
 
     } catch (error) {
