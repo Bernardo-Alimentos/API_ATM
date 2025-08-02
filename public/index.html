@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard de Averbação</title>
-    <!-- CSS da Biblioteca DataTables -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -24,7 +23,6 @@
 
     <main class="main-content">
         
-        <!-- TELA 1: DASHBOARD -->
         <section id="dashboard-view" class="active-section">
             <div class="page-header">
                 <h2>Dashboard - Atividade de Hoje</h2>
@@ -33,9 +31,17 @@
                 <div class="info-bar">
                     <i class="fas fa-sync-alt"></i> Status: <strong id="status-text">Carregando dados...</strong>
                 </div>
+                <div class="dashboard-actions" style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="select-all-dashboard-notes" style="transform: scale(1.1);">
+                    <label for="select-all-dashboard-notes" style="margin-bottom: 0; font-weight: normal;">Selecionar Todos</label>
+                    <button id="reenviar-selecionadas-dashboard-btn" class="btn-primary" style="margin-left: 20px;">
+                        <i class="fas fa-redo"></i> Reenviar Selecionadas
+                    </button>
+                </div>
                 <table id="dashboard-table" class="display" style="width:100%">
                     <thead>
                         <tr>
+                            <th></th>
                             <th>Empresa</th>
                             <th>Nota</th>
                             <th>Tipo Nota</th>
@@ -47,13 +53,11 @@
                         </tr>
                     </thead>
                     <tbody id="dashboard-table-body">
-                        <!-- Linhas serão inseridas pelo script.js -->
                     </tbody>
                 </table>
             </div>
         </section>
 
-        <!-- TELA 2: CONSULTA -->
         <section id="consulta-view" class="hidden-section">
             <div class="page-header">
                 <h2>Consultar Histórico</h2>
@@ -93,7 +97,6 @@
                 <div class="info-bar" id="consulta-results-info">
                     Realize uma busca para ver os resultados.
                 </div>
-                <!-- NOVO: Botão de Reenvio e Checkbox Global -->
                 <div class="consulta-actions" style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
                     <input type="checkbox" id="select-all-notes" style="transform: scale(1.1);">
                     <label for="select-all-notes" style="margin-bottom: 0; font-weight: normal;">Selecionar Todos</label>
@@ -105,7 +108,7 @@
                 <table id="consulta-table" class="display" style="width:100%">
                     <thead>
                         <tr>
-                            <th></th> <!-- Coluna para o checkbox individual -->
+                            <th></th>
                             <th>Empresa</th>
                             <th>Nota</th>
                             <th>Tipo Nota</th>
@@ -117,13 +120,11 @@
                         </tr>
                     </thead>
                     <tbody id="consulta-table-body">
-                        <!-- Resultados da busca serão inseridos aqui -->
                     </tbody>
                 </table>
             </div>
         </section>
 
-        <!-- TELA 3: CONFIGURAÇÕES DE EMPRESAS -->
         <section id="config-view" class="hidden-section">
             <div class="page-header">
                 <h2>Configurações de Empresas</h2>
@@ -150,7 +151,6 @@
                         </tr>
                     </thead>
                     <tbody id="empresas-table-body">
-                        <!-- Linhas das empresas serão inseridas aqui via JS -->
                     </tbody>
                 </table>
 
@@ -159,7 +159,6 @@
 
     </main>
 
-    <!-- MODAL PARA ADIÇÃO/EDIÇÃO DE EMPRESA -->
     <div id="empresa-modal" class="modal hidden">
         <div class="modal-content">
             <span class="close-button" id="close-empresa-modal">&times;</span>
@@ -217,7 +216,6 @@
         </div>
     </div>
 
-    <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="script.js"></script>

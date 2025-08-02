@@ -1,32 +1,24 @@
-/*
-================================================================================
-ARQUIVO: /public/script.js
-INSTRUÇÕES: Lógica do front-end para o dashboard, consulta e configurações de empresas.
-================================================================================
-*/
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Elementos Comuns ---
     const statusText = document.getElementById('status-text');
     let dashboardDataTable = null;
     let consultaDataTable = null;
     let empresasDataTable = null;
 
-    // --- Elementos das Views ---
     const dashboardView = document.getElementById('dashboard-view');
     const consultaView = document.getElementById('consulta-view');
     const configView = document.getElementById('config-view');
 
-    // --- Elementos de Navegação ---
     const navDashboard = document.getElementById('nav-dashboard');
     const navConsulta = document.getElementById('nav-consulta');
     const navConfig = document.getElementById('nav-config');
 
-    // --- Elementos da Consulta ---
-    const consultaForm = document.getElementById('consulta-form');
-    const selectAllNotesCheckbox = document.getElementById('select-all-notes'); // NOVO: Checkbox "Selecionar Todos"
-    const reenviarSelecionadasBtn = document.getElementById('reenviar-selecionadas-btn'); // NOVO: Botão "Reenviar Selecionadas"
+    const selectAllDashboardNotesCheckbox = document.getElementById('select-all-dashboard-notes');
+    const reenviarSelecionadasDashboardBtn = document.getElementById('reenviar-selecionadas-dashboard-btn');
 
-    // --- Elementos das Configurações de Empresas ---
+    const consultaForm = document.getElementById('consulta-form');
+    const selectAllNotesCheckbox = document.getElementById('select-all-notes');
+    const reenviarSelecionadasBtn = document.getElementById('reenviar-selecionadas-btn');
+
     const addEmpresaBtn = document.getElementById('add-empresa-btn');
     const empresaModal = document.getElementById('empresa-modal');
     const closeEmpresaModalBtn = document.getElementById('close-empresa-modal');
@@ -36,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveEmpresaBtn = document.getElementById('save-empresa-btn');
     const cancelEditBtn = document.getElementById('cancel-edit-btn');
 
-    // Mapeia IDs dos inputs do formulário para os nomes dos campos no objeto da empresa
     const formFieldMap = {
         'nome_empresa': 'nome_empresa',
         'cnpj': 'cnpj',
@@ -48,7 +39,6 @@ document.addEventListener('DOMContentLoaded', () => {
         'ativo': 'ativo'
     };
 
-    // Mapeia os status internos para textos e classes CSS
     const statusMap = {
         'AVERBADA': { text: 'Averbada', className: 'status-AVERBADA' },
         'AGUARDANDO_ENVIO_ATM': { text: 'Aguardando Envio', className: 'status-AGUARDANDO_ENVIO_ATM' },
@@ -57,7 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
         'IGNORADA_REGRA': { text: 'Ignorada', className: 'status-IGNORADA_REGRA' }
     };
 
-    // --- Lógica de Navegação e Visibilidade das Seções ---
     function showView(viewToShowId) {
         document.querySelectorAll('.sidebar-nav li a').forEach(link => link.classList.remove('active'));
         document.querySelectorAll('main section').forEach(section => {
@@ -65,25 +54,25 @@ document.addEventListener('DOMContentLoaded', () => {
             section.classList.add('hidden-section');
         });
 
-        // Destroi DataTables se existirem (antes de ocultar ou antes de criar nova instância)
         if (dashboardDataTable) { dashboardDataTable.destroy(); dashboardDataTable = null; }
         if (consultaDataTable) { consultaDataTable.destroy(); consultaDataTable = null; }
         if (empresasDataTable) { empresasDataTable.destroy(); empresasDataTable = null; }
 
-        closeEmpresaModal(); // Fechar o modal sempre que trocar de view principal.
+        closeEmpresaModal();
 
         if (viewToShowId === 'dashboard-view') {
             navDashboard.classList.add('active');
             dashboardView.classList.remove('hidden-section');
             dashboardView.classList.add('active-section');
             fetchDashboardData();
+            selectAllDashboardNotesCheckbox.checked = false;
         } else if (viewToShowId === 'consulta-view') {
             navConsulta.classList.add('active');
             consultaView.classList.remove('hidden-section');
             consultaView.classList.add('active-section');
-            // Resetar filtros e buscar dados ao entrar na consulta
             consultaForm.reset();
-            fetchConsultaData(''); // Carrega a consulta vazia ao entrar na tela
+            fetchConsultaData('');
+            selectAllNotesCheckbox.checked = false;
         } else if (viewToShowId === 'config-view') {
             navConfig.classList.add('active');
             configView.classList.remove('hidden-section');
@@ -97,8 +86,6 @@ document.addEventListener('DOMContentLoaded', () => {
     navConsulta.addEventListener('click', (e) => { e.preventDefault(); showView('consulta-view'); });
     navConfig.addEventListener('click', (e) => { e.preventDefault(); showView('config-view'); });
 
-
-    // --- Lógica do Dashboard ---
     async function fetchDashboardData() {
         statusText.previousElementSibling.classList.add('fa-spin');
         statusText.textContent = 'Carregando dados...';
@@ -124,6 +111,15 @@ document.addEventListener('DOMContentLoaded', () => {
         dashboardDataTable = new DataTable('#dashboard-table', {
             data: data,
             columns: [
+                {
+                    data: 'id',
+                    render: function (data, type, row) {
+                        const canResend = ['PENDENTE_PROCESSAMENTO', 'AGUARDANDO_ENVIO_ATM', 'ERRO_AVERBACAO'].includes(row.status);
+                        return canResend ? `<input type="checkbox" class="dashboard-note-select-checkbox" value="${data}">` : '';
+                    },
+                    orderable: false,
+                    className: 'dt-body-center'
+                },
                 { data: 'nome_empresa' },
                 { data: 'numero_nota' },
                 { data: 'tipo_nota' },
@@ -146,11 +142,60 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             ],
             language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json' },
-            order: [[6, 'desc']]
+            order: [[7, 'desc']]
+        });
+
+        $('#dashboard-table').off('change', '.dashboard-note-select-checkbox').on('change', '.dashboard-note-select-checkbox', function () {
+            if (!this.checked) {
+                selectAllDashboardNotesCheckbox.checked = false;
+            } else {
+                const allChecked = $('.dashboard-note-select-checkbox:visible:not(:checked)').length === 0;
+                selectAllDashboardNotesCheckbox.checked = allChecked;
+            }
         });
     }
 
-    // --- Lógica da Consulta ---
+    selectAllDashboardNotesCheckbox.addEventListener('change', function () {
+        $('.dashboard-note-select-checkbox:visible').prop('checked', this.checked);
+    });
+
+    reenviarSelecionadasDashboardBtn.addEventListener('click', async () => {
+        const selectedNoteIds = [];
+        $('.dashboard-note-select-checkbox:checked').each(function () {
+            selectedNoteIds.push(parseInt($(this).val()));
+        });
+
+        if (selectedNoteIds.length === 0) {
+            alert('Selecione pelo menos uma nota para reenviar no Dashboard.');
+            return;
+        }
+
+        if (!confirm(`Tem certeza que deseja reenviar ${selectedNoteIds.length} nota(s) selecionada(s) do Dashboard?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/consulta/reenviar-notas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ noteIds: selectedNoteIds })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido ao reenviar notas.' }));
+                throw new Error(errorData.error || `Erro HTTP! Status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            alert(result.message || 'Notas selecionadas enviadas para reprocessamento.');
+            fetchDashboardData();
+            selectAllDashboardNotesCheckbox.checked = false;
+        } catch (error) {
+            console.error('Erro ao reenviar notas do Dashboard:', error);
+            alert(`Erro ao reenviar notas do Dashboard: ${error.message}`);
+        }
+    });
+
     consultaForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(consultaForm);
@@ -187,15 +232,14 @@ document.addEventListener('DOMContentLoaded', () => {
         consultaDataTable = new DataTable('#consulta-table', {
             data: data,
             columns: [
-                { // NOVO: Coluna para o checkbox individual
+                {
                     data: 'id',
                     render: function (data, type, row) {
-                        // Apenas permite selecionar notas com status de reenvio válido
                         const canResend = ['PENDENTE_PROCESSAMENTO', 'AGUARDANDO_ENVIO_ATM', 'ERRO_AVERBACAO'].includes(row.status);
                         return canResend ? `<input type="checkbox" class="note-select-checkbox" value="${data}">` : '';
                     },
                     orderable: false,
-                    className: 'dt-body-center' // Centraliza o checkbox
+                    className: 'dt-body-center'
                 },
                 { data: 'nome_empresa' },
                 { data: 'numero_nota' },
@@ -219,32 +263,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             ],
             language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json' },
-            order: [[7, 'desc']] // Ajuste o índice da coluna para ordenação (agora 7 para "Processado em")
+            order: [[7, 'desc']]
         });
 
-        // NOVO: Event listeners para os checkboxes da tabela de consulta
         $('#consulta-table').off('change', '.note-select-checkbox').on('change', '.note-select-checkbox', function () {
-            // Se um checkbox individual mudar, desmarca "Selecionar Todos" se nem todos estiverem marcados
             if (!this.checked) {
                 selectAllNotesCheckbox.checked = false;
             } else {
-                // Verifica se todos os checkboxes visíveis estão marcados
                 const allChecked = $('.note-select-checkbox:visible:not(:checked)').length === 0;
                 selectAllNotesCheckbox.checked = allChecked;
             }
         });
     }
 
-    // NOVO: Lógica para o checkbox "Selecionar Todos"
     selectAllNotesCheckbox.addEventListener('change', function () {
-        // Marca/desmarca todos os checkboxes individuais visíveis
         $('.note-select-checkbox:visible').prop('checked', this.checked);
     });
 
-    // NOVO: Lógica para o botão "Reenviar Selecionadas"
     reenviarSelecionadasBtn.addEventListener('click', async () => {
         const selectedNoteIds = [];
-        // Coleta os IDs das notas selecionadas
         $('.note-select-checkbox:checked').each(function () {
             selectedNoteIds.push(parseInt($(this).val()));
         });
@@ -272,21 +309,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const result = await response.json();
             alert(result.message || 'Notas selecionadas enviadas para reprocessamento.');
-            // Após o reenvio, recarrega a tabela de consulta para ver os status atualizados
             const formData = new FormData(consultaForm);
             const params = new URLSearchParams(formData);
-            await fetchConsultaData(params.toString()); // Re-executa a busca com os filtros atuais
-            selectAllNotesCheckbox.checked = false; // Desmarca o "Selecionar Todos"
+            await fetchConsultaData(params.toString());
+            selectAllNotesCheckbox.checked = false;
         } catch (error) {
             console.error('Erro ao reenviar notas:', error);
             alert(`Erro ao reenviar notas: ${error.message}`);
         }
     });
 
-
-    // --- Lógica das Configurações de Empresas ---
-
-    // Funções para abrir/fechar o modal
     function openEmpresaModal() {
         empresaModal.classList.remove('hidden');
     }
@@ -296,7 +328,6 @@ document.addEventListener('DOMContentLoaded', () => {
         resetEmpresaForm();
     }
 
-    // Event listeners para o modal
     closeEmpresaModalBtn.addEventListener('click', closeEmpresaModal);
     window.addEventListener('click', (event) => {
         if (event.target == empresaModal) {
@@ -478,7 +509,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Inicialização da Aplicação ---
     showView('dashboard-view');
     setInterval(fetchDashboardData, 30000);
 });
